@@ -1,0 +1,9 @@
+Package: amnfisClassifier
+Type: Package
+Title: Exposes the functionality to train an artificial neural network and make predictions in accordance with the AMNFIS architecture
+Version: 0.1.0
+Author: Deyber Valencia
+Maintainer: Who to complain to <deavalenciago@unal.edu.co>
+Description: AMNFIS is an Adaptive Mulditimensional Neuro Fuzzy Inference System and this package implements its architecture in order to solve classification problems
+License: What license is it under?
+LazyData: TRUE
