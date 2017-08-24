@@ -1,4 +1,6 @@
-
+vec.required_packages <- c("foreach", "doParallel")
+vec.new_packages <- vec.required_packages[!(vec.required_packages %in% installed.packages()[,"Package"])]
+if(length(vec.new_packages)) install.packages(vec.new_packages)
 library(foreach)
 library(doParallel)
 
