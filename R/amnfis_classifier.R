@@ -1,10 +1,16 @@
-vec.required_packages <- c("foreach", "doParallel", "iterators")
+vec.required_packages <- c("iterators", "foreach", "doParallel")
 vec.new_packages <- vec.required_packages[!(vec.required_packages %in% installed.packages()[,"Package"])]
 if(length(vec.new_packages)) install.packages(vec.new_packages)
 library(foreach)
 library(doParallel)
 
-
+#' Main function to train a neural network based on the AMNFIS architecture.
+#'
+#' @param X input numeric matrix with the trining data of dimensions mxn where m are the number of examples and n the number of features(attributes)
+#' @param d input numeric vector with the classes of the training data
+#' @param clusters matrix with the centroids of each cluster
+#' @return object a model which contains the params(weights) of the neural network
+#' @export
 fn.amnfis <- function(X, d, clusters){
 
   k <- nrow(clusters)

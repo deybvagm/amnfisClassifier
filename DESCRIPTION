@@ -7,3 +7,4 @@ Maintainer: Who to complain to <deavalenciago@unal.edu.co>
 Description: AMNFIS is an Adaptive Mulditimensional Neuro Fuzzy Inference System and this package implements its architecture in order to solve classification problems
 License: What license is it under?
 LazyData: TRUE
+RoxygenNote: 6.0.1
