@@ -44,6 +44,16 @@ fn.amnfis <- function(X, d, clusters){
     return(error)
   }
 
+  fn.load_random_vector <- function(size){
+    return(rnorm(size))
+  }
+
+  fn.load_random_phi <- function(k ,n){
+    phi_params <- matrix(rnorm(k * n), nrow = k, ncol = n)
+    return(phi_params)
+  }
+
+
   ################### MAIN FUNCTION ###############
   m <- dim(X)[1]
   n <- dim(X)[2]
@@ -72,7 +82,44 @@ fn.amnfis <- function(X, d, clusters){
 
 }
 
+#' Function that makes a prediction of the class given the data
+#'
+#' @param obj input object with the network parameters(weights)
+#' @param X input numeric matrix which contains the input data
+#' @param C input numeric matrix with the centroids of each cluster
+#' @return y a numeric vector which contains the class predicted for each instance in X
+#' @export
 fn.amnfis_simulate <- function(obj, X, C) {
+
+  ############# HELPER FUNCTIONS #########################
+
+  fn.get_Xi_Ci_Distances <- function(X, C){
+    m <- dim(X)[1]
+    n <- dim(X)[2]
+    k <- dim(C)[1]
+    replByCol <- rep(k, n)
+    replByRow <- rep(m, n)
+    transformedX <- X[,rep(1:n, replByCol)]
+    transformedC <- matrix(rep(C, each=nrow(X)), nrow=m)
+    dista <- (transformedX - transformedC)^2
+    distaces3D <- array(dista, c(m,k,n))
+    distancesList <- lapply(seq(dim(distaces3D)[3]), function(x) distaces3D[ , , x])
+    rsp <- Reduce('+', distancesList)
+    return(rsp)
+  }
+
+  fn.get_membership <- function(distances){
+    if(is.vector(distances)){
+      distances <- matrix(distances)
+    }
+    return(exp(-distances/rowSums(distances)))
+  }
+
+  fn.contrib <- function(membership){
+    return(membership/rowSums(membership))
+  }
+
+  ############ FUNCTION BODY ###################
 
   n <- dim(X)[2]
   # Layer 1: calculate the distance between the Inputs(Xi) and each Cluster(Ci)
@@ -97,167 +144,145 @@ fn.amnfis_simulate <- function(obj, X, C) {
   return(y)
 }
 
-fn.load_random_vector <- function(size){
-  return(rnorm(size))
-}
+#' Function that train a neural network on the training data and gets the correct clusters and weights for making predictions
+#'
+#' @param df input dataframe with the training data. Should also contains the class column
+#' @param X input numeric matrix which contains the input data without the class column
+#' @param d input numeric vector with correct classes for the training data
+#' @param formula input formula specifying which are the descriptors and which is the class column in the df. i.e V9~.
+#' @param n_clusters the number of clusters to find
+#' @return object with the best centroids and the best parameters for the network (weights)
+#' @export
+fn.train_amnfis <- function(df, X, d, formula, n_clusters){
 
-fn.load_random_phi <- function(k ,n){
-  phi_params <- matrix(rnorm(k * n), nrow = k, ncol = n)
-  return(phi_params)
-}
+  ############## HELPER FUNCTIONS ###########################
 
-fn.get_Xi_Ci_Distances <- function(X, C){
-  m <- dim(X)[1]
-  n <- dim(X)[2]
-  k <- dim(C)[1]
-  replByCol <- rep(k, n)
-  replByRow <- rep(m, n)
-  transformedX <- X[,rep(1:n, replByCol)]
-  transformedC <- matrix(rep(C, each=nrow(X)), nrow=m)
-  dista <- (transformedX - transformedC)^2
-  distaces3D <- array(dista, c(m,k,n))
-  distancesList <- lapply(seq(dim(distaces3D)[3]), function(x) distaces3D[ , , x])
-  rsp <- Reduce('+', distancesList)
-  return(rsp)
-}
-
-fn.get_membership <- function(distances){
-  if(is.vector(distances)){
-    distances <- matrix(distances)
+  fn.transform_output <- function(output){
+    rsp <- ifelse(as.vector(output) > 0.5, 1, 0)
+    return(rsp)
   }
-  return(exp(-distances/rowSums(distances)))
-}
 
-fn.contrib <- function(membership){
-  return(membership/rowSums(membership))
-}
+  # Function to define the centroids of each cluster
+  fn.getcentroids <- function(all_data, n, formula){
+    print("Calculating centroids for clusters...")
 
+    fn.groupdata <- function(all_data, n, formula){
 
-fn.transform_output <- function(output){
-  rsp <- ifelse(as.vector(output) > 0.5, 1, 0)
-  return(rsp)
-}
+      if(n ==1){
+        data <- list(all_data)
+      }else{
+        models <- list()
 
-# Function to define the centroids of each cluster
-fn.getcentroids <- function(all_data, n, formula){
-  print("Calculating centroids for clusters...")
+        initial_model <- fn.splitdata(formula, all_data)
+        initial_model <- initial_model[[1]]
+        part1 <- initial_model$data[initial_model$part1,]
+        part2 <- initial_model$data[initial_model$part2,]
 
-  fn.groupdata <- function(all_data, n, formula){
+        idx_loop <- 3
 
-    if(n ==1){
-      data <- list(all_data)
-    }else{
-      models <- list()
+        while(idx_loop <= n){
+          model_a <- fn.splitdata(formula, part1)
+          model_b <- fn.splitdata(formula, part2)
+          model_a <- model_a[[1]]
+          model_b <- model_b[[1]]
 
-      initial_model <- fn.splitdata(formula, all_data)
-      initial_model <- initial_model[[1]]
-      part1 <- initial_model$data[initial_model$part1,]
-      part2 <- initial_model$data[initial_model$part2,]
-
-      idx_loop <- 3
-
-      while(idx_loop <= n){
-        model_a <- fn.splitdata(formula, part1)
-        model_b <- fn.splitdata(formula, part2)
-        model_a <- model_a[[1]]
-        model_b <- model_b[[1]]
-
-        if(length(models) == 0){
-          models <- list(model_a, model_b)
-        }else{
-          models[[length(models) + 1]] <- model_a
-          models[[length(models) + 1]] <- model_b
+          if(length(models) == 0){
+            models <- list(model_a, model_b)
+          }else{
+            models[[length(models) + 1]] <- model_a
+            models[[length(models) + 1]] <- model_b
+          }
+          errors <- lapply(models, fn.fetcherrors)
+          idx_min_error <- which.min(errors)
+          obj <- models[[idx_min_error]]
+          models[[idx_min_error]] <- NULL
+          part1 <- obj$data[obj$part1,]
+          part2 <- obj$data[obj$part2,]
+          idx_loop <- idx_loop + 1
         }
-        errors <- lapply(models, fn.fetcherrors)
-        idx_min_error <- which.min(errors)
-        obj <- models[[idx_min_error]]
-        models[[idx_min_error]] <- NULL
-        part1 <- obj$data[obj$part1,]
-        part2 <- obj$data[obj$part2,]
-        idx_loop <- idx_loop + 1
+        data <- lapply(models, fn.datafrommodels)
+        data[[length(data) + 1 ]] <- part1
+        data[[length(data) + 1 ]] <- part2
       }
-      data <- lapply(models, fn.datafrommodels)
-      data[[length(data) + 1 ]] <- part1
-      data[[length(data) + 1 ]] <- part2
+      return(data)
     }
-    return(data)
+
+    fn.splitdata <- function(formula, data){
+      original <- data
+      mat <- apply(as.matrix(data[,1:ncol(data) -1]), 2, fn.getpartitions, formula = formula, data = data)
+      errors <- unlist(lapply(mat, fn.fetcherrors))
+      lowest_error_idx <- which.min(errors)
+      return(unname(mat[lowest_error_idx]))
+    }
+
+    fn.fetcherrors <- function(object){
+      return(object$error)
+    }
+
+    fn.datafrommodels <- function(model){
+      return(model$data)
+    }
+
+    fn.getpartitions <- function(v, formula, data){
+      v_replicated <- fn.replicatedata(v)
+      partitions <- t(ifelse(t(v_replicated) >= v, 1, 0))
+      fit_errors <- apply(partitions, 2, fn.fitdata, formula = formula, data = data)
+      errors <- lapply(fit_errors, fn.fetcherrors)
+      errors <- unlist(errors)
+      lowes_error_idx <- which.min(errors)
+      best_partition <- fit_errors[[lowes_error_idx]]
+      return(best_partition)
+    }
+
+    # Split into two datasets, for training and for getting the errors. this is done for each column
+    fn.fitdata <- function(v_logic, formula, data){
+      part1 <- which(v_logic == 1, arr.ind = TRUE)
+      part2 <- which(v_logic == 0, arr.ind = FALSE)
+      data_part1 <- data[part1,]
+      data_part2 <- data[part2,]
+      error1 <- ifelse((nrow(data_part1) > 0 && nrow(data_part2) > 0), fn.fit_linear_classifier(formula, data_part1), 100)
+      error2 <- ifelse((nrow(data_part1) > 0 && nrow(data_part2) > 0), fn.fit_linear_classifier(formula, data_part2), 100)
+      obj <- list(error = error1 + error2, part1 = part1, part2 = part2, data = data)
+      return(obj)
+    }
+
+    # Replicates data
+    fn.replicatedata <- function(v){
+      n <- length(v)
+      return(matrix(rep(v, each = n), ncol = n, byrow = TRUE))
+    }
+
+    # Removes the class columns
+    fn.removeclass <- function(v){
+      v <- v[1:length(v) - 1]
+      return(v)
+    }
+
+    # Fits a linear classifier for a sample data and returns the error
+    fn.fit_linear_classifier <- function(formula, data){
+      y <- data[,ncol(data)]
+      response <- glm(formula, data = data)
+      mse <- fn.error(y, response$fitted.values)
+      return(mse)
+    }
+
+    # Calculates the MSE
+    fn.error <- function(y, predictions){
+      mse <- sum((y - predictions)^2)/length(y)
+      return(mse)
+    }
+
+    groups <- fn.groupdata(all_data, n, formula)
+    centroids <- lapply(groups, colMeans)
+    columns <- ncol(all_data) - 1
+    centroids <- lapply(centroids, fn.removeclass)
+    centroid_matrix <- matrix(unlist(centroids), ncol = columns, byrow = TRUE)
+    print("Centroids calculated...")
+    return(centroid_matrix)
   }
 
-  fn.splitdata <- function(formula, data){
-    original <- data
-    mat <- apply(as.matrix(data[,1:ncol(data) -1]), 2, fn.getpartitions, formula = formula, data = data)
-    errors <- unlist(lapply(mat, fn.fetcherrors))
-    lowest_error_idx <- which.min(errors)
-    return(unname(mat[lowest_error_idx]))
-  }
+  ############# BODY FUNCTION #########################
 
-  fn.fetcherrors <- function(object){
-    return(object$error)
-  }
-
-  fn.datafrommodels <- function(model){
-    return(model$data)
-  }
-
-  fn.getpartitions <- function(v, formula, data){
-    v_replicated <- fn.replicatedata(v)
-    partitions <- t(ifelse(t(v_replicated) >= v, 1, 0))
-    fit_errors <- apply(partitions, 2, fn.fitdata, formula = formula, data = data)
-    errors <- lapply(fit_errors, fn.fetcherrors)
-    errors <- unlist(errors)
-    lowes_error_idx <- which.min(errors)
-    best_partition <- fit_errors[[lowes_error_idx]]
-    return(best_partition)
-  }
-
-  # Split into two datasets, for training and for getting the errors. this is done for each column
-  fn.fitdata <- function(v_logic, formula, data){
-    part1 <- which(v_logic == 1, arr.ind = TRUE)
-    part2 <- which(v_logic == 0, arr.ind = FALSE)
-    data_part1 <- data[part1,]
-    data_part2 <- data[part2,]
-    error1 <- ifelse((nrow(data_part1) > 0 && nrow(data_part2) > 0), fn.fit_linear_classifier(formula, data_part1), 100)
-    error2 <- ifelse((nrow(data_part1) > 0 && nrow(data_part2) > 0), fn.fit_linear_classifier(formula, data_part2), 100)
-    obj <- list(error = error1 + error2, part1 = part1, part2 = part2, data = data)
-    return(obj)
-  }
-
-  # Replicates data
-  fn.replicatedata <- function(v){
-    n <- length(v)
-    return(matrix(rep(v, each = n), ncol = n, byrow = TRUE))
-  }
-
-  # Removes the class columns
-  fn.removeclass <- function(v){
-    v <- v[1:length(v) - 1]
-    return(v)
-  }
-
-  # Fits a linear classifier for a sample data and returns the error
-  fn.fit_linear_classifier <- function(formula, data){
-    y <- data[,ncol(data)]
-    response <- glm(formula, data = data)
-    mse <- fn.error(y, response$fitted.values)
-    return(mse)
-  }
-
-  # Calculates the MSE
-  fn.error <- function(y, predictions){
-    mse <- sum((y - predictions)^2)/length(y)
-    return(mse)
-  }
-
-  groups <- fn.groupdata(all_data, n, formula)
-  centroids <- lapply(groups, colMeans)
-  columns <- ncol(all_data) - 1
-  centroids <- lapply(centroids, fn.removeclass)
-  centroid_matrix <- matrix(unlist(centroids), ncol = columns, byrow = TRUE)
-  print("Centroids calculated...")
-  return(centroid_matrix)
-}
-
-fn.train_amnfis <- function(df, X, d, formula){
   centroids <- fn.getcentroids(all_data = df, n = 2, formula = formula)
   model <- fn.amnfis(X = X, d = d, clusters = centroids)
   predict <- fn.amnfis_simulate(obj = model, X = X, C = centroids)
@@ -266,7 +291,7 @@ fn.train_amnfis <- function(df, X, d, formula){
   result <- NULL
   result$acc <- c(acc)
   result$model <- c(model)
-  for (j in 3:10) {
+  for (j in 3:n_clusters) {
     print(paste("iteration ", j))
     acc <- 0
     vec_best_data_point <- c()
