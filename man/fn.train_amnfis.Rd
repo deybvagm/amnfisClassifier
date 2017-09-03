@@ -23,3 +23,23 @@ object with the best centroids and the best parameters for the network (weights)
 \description{
 Function that train a neural network on the training data and gets the correct clusters and weights for making predictions
 }
+\examples{
+library(mlbench)
+library(dplyr)
+library(caret)
+
+data("PimaIndiansDiabetes")
+
+pima_all <- PimaIndiansDiabetes \%>\% mutate(diabetes = ifelse(diabetes == "pos", 1, 0))
+
+## split the data to get the training set
+pima_train_index <- createDataPartition(y = pima_all$diabetes, p = 0.7989, list = FALSE, times = 1)
+df.pima_train <- pima_all[pima_train_index, ]
+
+## get all the columns but not the class
+mat.pima_train <- as.matrix(df.pima_train[,1:8])
+vec.pima_out_train <- df.pima_train$diabetes
+
+## this instruction get the rigth parameters to make predictions on the test set
+obj.res_pima <- fn.train_amnfis(df=df.pima_train, X=mat.pima_train, d=vec.pima_out_train, formula=diabetes~., n_clusters=8)
+}
