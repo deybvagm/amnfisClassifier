@@ -80,6 +80,35 @@ fn.amnfis <- function(X, d, clusters){
 
 }
 
+############# HELPER FUNCTIONS #########################
+
+fn.get_Xi_Ci_Distances <- function(X, C){
+  m <- dim(X)[1]
+  n <- dim(X)[2]
+  k <- dim(C)[1]
+  replByCol <- rep(k, n)
+  replByRow <- rep(m, n)
+  transformedX <- X[,rep(1:n, replByCol)]
+  transformedC <- matrix(rep(C, each=nrow(X)), nrow=m)
+  dista <- (transformedX - transformedC)^2
+  distaces3D <- array(dista, c(m,k,n))
+  distancesList <- lapply(seq(dim(distaces3D)[3]), function(x) distaces3D[ , , x])
+  rsp <- Reduce('+', distancesList)
+  return(rsp)
+}
+
+fn.get_membership <- function(distances){
+  if(is.vector(distances)){
+    distances <- matrix(distances)
+  }
+  return(exp(-distances/rowSums(distances)))
+}
+
+fn.contrib <- function(membership){
+  return(membership/rowSums(membership))
+}
+
+
 #' Function that makes a prediction of the class given the data
 #'
 #' @param obj input object with the network parameters(weights)
@@ -88,37 +117,6 @@ fn.amnfis <- function(X, d, clusters){
 #' @return y a numeric vector which contains the class predicted for each instance in X
 #' @export
 fn.amnfis_simulate <- function(obj, X, C) {
-
-  ############# HELPER FUNCTIONS #########################
-
-  fn.get_Xi_Ci_Distances <- function(X, C){
-    m <- dim(X)[1]
-    n <- dim(X)[2]
-    k <- dim(C)[1]
-    replByCol <- rep(k, n)
-    replByRow <- rep(m, n)
-    transformedX <- X[,rep(1:n, replByCol)]
-    transformedC <- matrix(rep(C, each=nrow(X)), nrow=m)
-    dista <- (transformedX - transformedC)^2
-    distaces3D <- array(dista, c(m,k,n))
-    distancesList <- lapply(seq(dim(distaces3D)[3]), function(x) distaces3D[ , , x])
-    rsp <- Reduce('+', distancesList)
-    return(rsp)
-  }
-
-  fn.get_membership <- function(distances){
-    if(is.vector(distances)){
-      distances <- matrix(distances)
-    }
-    return(exp(-distances/rowSums(distances)))
-  }
-
-  fn.contrib <- function(membership){
-    return(membership/rowSums(membership))
-  }
-
-  ############ FUNCTION BODY ###################
-
   n <- dim(X)[2]
   # Layer 1: calculate the distance between the Inputs(Xi) and each Cluster(Ci)
   DISTANCES <- fn.get_Xi_Ci_Distances(X, C)
@@ -133,12 +131,7 @@ fn.amnfis_simulate <- function(obj, X, C) {
   # Layer 5: calculate the output as the weighted average from the two previous layers
   X_PHI_CONTRIBUTIONS <- CONTRIBUTIONS * PHI_0_X_PHI
   y <- rowSums(X_PHI_CONTRIBUTIONS)
-
-  # y[y<-5] <- 0.01
-  # y[y>5] <-  0.99
-  # y[y>= -5 && y<=5] <- 1/(1+exp(-y))
   y <- 1/(1+exp(-y))
-
   return(y)
 }
 
@@ -343,4 +336,25 @@ fn.train_amnfis <- function(df, X, d, formula, n_clusters){
   }
   result$clusters <- centroids
   return(result)
+}
+
+fn.model_to_obj <- function(model, dataset='pima'){
+  obj <- NULL
+  if(dataset == 'pima'){
+    obj$PHI <- matrix(unlist(model[14]), ncol = 8, byrow = FALSE)
+    obj$phi_0 <- unlist(model[13], use.names=FALSE)
+  }else if(dataset == 'bupa'){
+    obj$PHI <- matrix(unlist(model[6]), ncol = 6, byrow = FALSE)
+    obj$phi_0 <- unlist(model[5], use.names=FALSE)
+  }else if(dataset == 'ionosphere'){
+    obj$PHI <- matrix(unlist(model[4]), ncol = 34, byrow = FALSE)
+    obj$phi_0 <- unlist(model[3], use.names=FALSE)
+  }
+  return(obj)
+}
+
+fn.get_predictions <- function(params, X, C){
+  output <- fn.amnfis_simulate(params, X, C)
+  output <- ifelse(as.vector(output) > 0.5, 1, 0)
+  return(output)
 }
