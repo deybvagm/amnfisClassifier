@@ -5,8 +5,6 @@ test_that("distances are correctly calculated with 10 data points(x,y coordinate
   X <- matrix(c(1,2,1,2,1,1,2,2,3,3,3,3,2,2,1,0,0,1,0,1), ncol = 2)
   C <- matrix(c(-1.6260988,0.302947,-0.5021358,0.7021099), ncol = 2)
   expected_distance <- matrix(c(19.16135007,25.41354767,13.15707847,19.40927607,9.152806869,7.148535269,13.40073287,15.40500447,21.65293047,23.65720207,5.766181796,8.160287796,2.170401596,4.564507596,0.5746213965,0.9788411965,3.372947196,2.968727396,7.767053196,7.362833396), ncol = 2)
-  # PHI <- matrix(c(-0.004729057,0.285950071,1.172539,0.1799518), ncol = 2)
-  # phi_0 <- c(0.3773669,1.8119634)
   computed_distances <- fn.get_Xi_Ci_Distances(X = X, C = C)
   expect_equal(computed_distances, expected_distance)
   expect_equal(dim(computed_distances), dim(expected_distance))
